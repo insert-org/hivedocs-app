@@ -4,13 +4,17 @@ import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -125,7 +129,14 @@ fun LoginScreen(onLoginSuccess: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Text("Bem-vindo ao HiveDocs", style = MaterialTheme.typography.headlineMedium)
+        Image(
+            painter = painterResource(id = R.drawable.logo),
+            contentDescription = "Logo da HiveDocs",
+            contentScale = ContentScale.Fit,
+            modifier = Modifier.size(100.dp)
+        )
+        Spacer(modifier = Modifier.height(32.dp))
+        Text("Bem-vindo ao HiveDocs!", style = MaterialTheme.typography.headlineMedium)
         Spacer(modifier = Modifier.height(32.dp))
 
         OutlinedTextField(
@@ -179,9 +190,9 @@ fun LoginScreen(onLoginSuccess: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.padding(vertical = 24.dp)
         ) {
-            HorizontalDivider(modifier = Modifier.weight(1f))
-            Text("OU", modifier = Modifier.padding(horizontal = 8.dp))
-            HorizontalDivider(modifier = Modifier.weight(1f))
+            HorizontalDivider(modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.primary)
+            Text("ou", modifier = Modifier.padding(horizontal = 8.dp))
+            HorizontalDivider(modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.primary)
         }
 
         Button(
@@ -196,7 +207,19 @@ fun LoginScreen(onLoginSuccess: () -> Unit) {
             },
             enabled = !isLoading
         ) {
-            Text("Login com Google")
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    painter = painterResource(id = R.drawable.google_icon),
+                    contentDescription = "Google logo",
+                    tint = Color.White,
+                    modifier = Modifier
+                        .size(20.dp)
+                        .padding(end = 8.dp)
+                )
+                Text("Continuar com Google")
+            }
         }
     }
 }

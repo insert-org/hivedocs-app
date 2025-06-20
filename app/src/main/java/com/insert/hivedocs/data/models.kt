@@ -16,10 +16,11 @@ data class Article(
     val year: Int = Calendar.getInstance().get(Calendar.YEAR),
 
     val ratingCount: Long = 0,
-    val ratingSum: Double = 0.0
+    val ratingSum: Double = 0.0,
+    val articleUrl: String = ""
 ) {
     @Suppress("unused")
-    constructor() : this("", "", "", "", false, 2024, 0, 0.0)
+    constructor() : this("", "", "", "", false, 2024, 0, 0.0, "")
 }
 
 @Keep

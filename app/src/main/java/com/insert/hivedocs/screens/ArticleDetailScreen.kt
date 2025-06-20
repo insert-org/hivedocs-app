@@ -3,6 +3,7 @@ package com.insert.hivedocs.screens
 import android.util.Log
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -26,6 +27,10 @@ import com.insert.hivedocs.data.Article
 import com.insert.hivedocs.data.Reply
 import com.insert.hivedocs.data.Review
 import java.text.SimpleDateFormat
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextDecoration
+import com.insert.hivedocs.R
 import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -34,6 +39,7 @@ fun ArticleDetailScreen(articleId: String, navController: NavController) {
     val firestore = FirebaseFirestore.getInstance()
     val auth = FirebaseAuth.getInstance()
     val context = LocalContext.current
+    val uriHandler = LocalUriHandler.current
 
     var article by remember { mutableStateOf<Article?>(null) }
     var reviews by remember { mutableStateOf<List<Review>>(emptyList()) }
@@ -139,11 +145,41 @@ fun ArticleDetailScreen(articleId: String, navController: NavController) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(text = "Por: ${article!!.author} (${article!!.year})", style = MaterialTheme.typography.titleMedium)
                     Spacer(modifier = Modifier.height(16.dp))
+
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         StarRatingDisplay(rating = averageRating)
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(text = "(${String.format("%.1f", averageRating)} de ${article!!.ratingCount} avaliações)", style = MaterialTheme.typography.bodyMedium)
                     }
+
+                    if (article!!.articleUrl.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Row(
+                            modifier = Modifier.clickable {
+                                try {
+                                    uriHandler.openUri(article!!.articleUrl)
+                                } catch (e: Exception) {
+                                    Log.e("ArticleDetailScreen", "Não foi possível abrir a URL", e)
+                                }
+                            },
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.link_solid),
+                                contentDescription = "Link para o artigo",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier
+                                    .size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Acessar artigo original",
+                                color = MaterialTheme.colorScheme.primary,
+                                textDecoration = TextDecoration.Underline
+                            )
+                        }
+                    }
+
                     Spacer(modifier = Modifier.height(16.dp))
                     Divider()
                     Spacer(modifier = Modifier.height(16.dp))
