@@ -129,7 +129,11 @@ fun MainAppScreen(isAdmin: Boolean) {
             composable("article_detail/{articleId}") { backStackEntry ->
                 val articleId = backStackEntry.arguments?.getString("articleId")
                 if (articleId != null) {
-                    ArticleDetailScreen(articleId = articleId, navController = navController)
+                    ArticleDetailScreen(
+                        articleId = articleId,
+                        navController = navController,
+                        isAdmin = isAdmin
+                    )
                 }
             }
         }

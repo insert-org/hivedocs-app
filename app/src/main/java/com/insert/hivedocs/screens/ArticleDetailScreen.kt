@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -31,15 +32,17 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextDecoration
 import com.insert.hivedocs.R
+import com.insert.hivedocs.components.StarRatingInput
 import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ArticleDetailScreen(articleId: String, navController: NavController) {
+fun ArticleDetailScreen(articleId: String, navController: NavController, isAdmin: Boolean) {
     val firestore = FirebaseFirestore.getInstance()
     val auth = FirebaseAuth.getInstance()
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
+    val currentUserId = auth.currentUser?.uid
 
     var article by remember { mutableStateOf<Article?>(null) }
     var reviews by remember { mutableStateOf<List<Review>>(emptyList()) }
@@ -67,6 +70,54 @@ fun ArticleDetailScreen(articleId: String, navController: NavController) {
                     userHasAlreadyReviewed = reviews.any { it.userId == user.uid }
                 }
             }
+    }
+
+    fun deleteReview(reviewToDelete: Review) {
+        firestore.runTransaction { transaction ->
+            val articleRef = firestore.collection("articles").document(articleId)
+            val reviewRef = articleRef.collection("reviews").document(reviewToDelete.id)
+
+            val articleSnapshot = transaction.get(articleRef)
+            val currentRatingCount = articleSnapshot.getLong("ratingCount") ?: 0L
+            val currentRatingSum = articleSnapshot.getDouble("ratingSum") ?: 0.0
+
+            if (currentRatingCount > 0) {
+                val newRatingCount = currentRatingCount - 1
+                val newRatingSum = currentRatingSum - reviewToDelete.rating
+                transaction.update(articleRef, "ratingCount", newRatingCount)
+                transaction.update(articleRef, "ratingSum", newRatingSum)
+            }
+
+            transaction.delete(reviewRef)
+            null
+        }.addOnSuccessListener {
+            Toast.makeText(context, "Avaliação excluída.", Toast.LENGTH_SHORT).show()
+        }.addOnFailureListener { e ->
+            Toast.makeText(context, "Erro ao excluir: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun editReview(reviewToEdit: Review, newRating: Float, newComment: String) {
+        firestore.runTransaction { transaction ->
+            val articleRef = firestore.collection("articles").document(articleId)
+            val reviewRef = articleRef.collection("reviews").document(reviewToEdit.id)
+
+            val articleSnapshot = transaction.get(articleRef)
+            val currentRatingSum = articleSnapshot.getDouble("ratingSum") ?: 0.0
+
+            val newRatingSum = currentRatingSum - reviewToEdit.rating + newRating
+            transaction.update(articleRef, "ratingSum", newRatingSum)
+
+            transaction.update(reviewRef, mapOf(
+                "rating" to newRating,
+                "comment" to newComment
+            ))
+            null
+        }.addOnSuccessListener {
+            Toast.makeText(context, "Avaliação atualizada.", Toast.LENGTH_SHORT).show()
+        }.addOnFailureListener { e ->
+            Toast.makeText(context, "Erro ao atualizar: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
     }
 
     fun submitReview() {
@@ -194,15 +245,21 @@ fun ArticleDetailScreen(articleId: String, navController: NavController) {
                 item {
                     Divider()
                     Text("Deixe sua avaliação", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(vertical = 16.dp))
-                    Slider(
-                        value = userRating,
-                        onValueChange = { userRating = it },
-                        valueRange = 0.5f..5f,
-                        steps = 8
-                    )
-                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                        Text(text = "Nota: ${String.format("%.1f", userRating)}")
+
+                    Box(
+                        modifier = Modifier.fillMaxWidth(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        StarRatingInput(
+                            rating = userRating,
+                            onRatingChange = { newRating -> userRating = newRating }
+                        )
                     }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        Text(text = "Sua nota: ${String.format("%.1f", userRating)}")
+                    }
+
                     Spacer(modifier = Modifier.height(16.dp))
                     OutlinedTextField(
                         value = userComment,
@@ -214,7 +271,6 @@ fun ArticleDetailScreen(articleId: String, navController: NavController) {
                     Button(onClick = { submitReview() }, enabled = !isSubmitting, modifier = Modifier.fillMaxWidth()) {
                         if (isSubmitting) CircularProgressIndicator(modifier = Modifier.size(24.dp)) else Text("Enviar Avaliação")
                     }
-                    Spacer(modifier = Modifier.height(24.dp))
                 }
             }
 
@@ -226,7 +282,16 @@ fun ArticleDetailScreen(articleId: String, navController: NavController) {
                 item { Text("Nenhuma avaliação ainda. Seja o primeiro!") }
             } else {
                 items(reviews, key = { it.id }) { review ->
-                    ReviewItem(review = review, articleId = articleId)
+                    ReviewItem(
+                        review = review,
+                        articleId = articleId,
+                        currentUserId = currentUserId,
+                        isAdmin = isAdmin,
+                        onDelete = { deleteReview(review) },
+                        onEdit = { newRating, newComment ->
+                            editReview(review, newRating, newComment)
+                        }
+                    )
                 }
             }
         }
@@ -234,7 +299,20 @@ fun ArticleDetailScreen(articleId: String, navController: NavController) {
 }
 
 @Composable
-fun ReviewItem(review: Review, articleId: String) {
+fun ReviewItem(
+    review: Review,
+    articleId: String,
+    currentUserId: String?,
+    isAdmin: Boolean,
+    onDelete: () -> Unit,
+    onEdit: (newRating: Float, newComment: String) -> Unit
+) {
+    var isEditing by remember { mutableStateOf(false) }
+    var editedRating by remember { mutableFloatStateOf(review.rating) }
+    var editedComment by remember { mutableStateOf(review.comment) }
+
+    var menuExpanded by remember { mutableStateOf(false) }
+
     var replies by remember { mutableStateOf<List<Reply>>(emptyList()) }
     var showReplies by remember { mutableStateOf(false) }
     var showReplyInput by remember { mutableStateOf(false) }
@@ -244,7 +322,7 @@ fun ReviewItem(review: Review, articleId: String) {
     val context = LocalContext.current
 
     LaunchedEffect(showReplies) {
-        if (showReplies && replies.isEmpty()) { // Otimização: só busca se ainda não buscou
+        if (showReplies && replies.isEmpty()) {
             firestore.collection("articles").document(articleId).collection("reviews")
                 .document(review.id).collection("replies")
                 .orderBy("timestamp", Query.Direction.ASCENDING)
@@ -276,44 +354,102 @@ fun ReviewItem(review: Review, articleId: String) {
         modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
         elevation = CardDefaults.cardElevation(2.dp)
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(text = review.userName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.weight(1f))
-                review.timestamp?.toDate()?.let {
-                    Text(text = SimpleDateFormat("dd/MM/yy", Locale.getDefault()).format(it), style = MaterialTheme.typography.bodySmall)
+        if (isEditing) {
+            // --- MODO DE EDIÇÃO ---
+            Column(modifier = Modifier.padding(12.dp)) {
+                Text("Editando sua avaliação", style = MaterialTheme.typography.titleMedium)
+                Spacer(modifier = Modifier.height(8.dp))
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxWidth()) {
+                    StarRatingInput(rating = editedRating, onRatingChange = { editedRating = it })
                 }
-            }
-            Spacer(modifier = Modifier.height(4.dp))
-            StarRatingDisplay(rating = review.rating, starSize = 16.dp)
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(text = review.comment, style = MaterialTheme.typography.bodyLarge)
-            Spacer(modifier = Modifier.height(8.dp))
-            Row {
-                TextButton(onClick = { showReplyInput = !showReplyInput }) { Text("Responder") }
-                Spacer(modifier = Modifier.width(8.dp))
-                if (replies.isNotEmpty() || !showReplies) {
-                    TextButton(onClick = { showReplies = !showReplies }) {
-                        Text(if (showReplies) "Ocultar Respostas" else "Ver Respostas")
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = editedComment,
+                    onValueChange = { editedComment = it },
+                    label = { Text("Seu comentário") },
+                    modifier = Modifier.fillMaxWidth().height(100.dp)
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(modifier = Modifier.align(Alignment.End)) {
+                    TextButton(onClick = { isEditing = false }) { Text("Cancelar") }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(onClick = {
+                        onEdit(editedRating, editedComment)
+                        isEditing = false
+                    }) {
+                        Text("Salvar")
                     }
                 }
             }
+        } else {
+            Column(modifier = Modifier.padding(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(text = review.userName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.weight(1f))
 
-            AnimatedVisibility(visible = showReplyInput) {
-                Row(modifier = Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedTextField(value = replyText, onValueChange = { replyText = it }, label = { Text("Sua resposta...") }, modifier = Modifier.weight(1f))
-                    IconButton(onClick = ::postReply) {
-                        Icon(Icons.Default.Send, contentDescription = "Enviar Resposta")
+                    val canManage = isAdmin || (review.userId == currentUserId)
+                    if (canManage) {
+                        Box {
+                            IconButton(onClick = { menuExpanded = true }) {
+                                Icon(Icons.Default.MoreVert, contentDescription = "Opções")
+                            }
+                            DropdownMenu(
+                                expanded = menuExpanded,
+                                onDismissRequest = { menuExpanded = false }
+                            ) {
+                                if (review.userId == currentUserId) {
+                                    DropdownMenuItem(
+                                        text = { Text("Editar") },
+                                        onClick = {
+                                            editedRating = review.rating
+                                            editedComment = review.comment
+                                            isEditing = true
+                                            menuExpanded = false
+                                        }
+                                    )
+                                }
+                                DropdownMenuItem(
+                                    text = { Text("Excluir", color = MaterialTheme.colorScheme.error) },
+                                    onClick = {
+                                        onDelete()
+                                        menuExpanded = false
+                                    }
+                                )
+                            }
+                        }
                     }
                 }
-            }
+                Spacer(modifier = Modifier.height(4.dp))
+                StarRatingDisplay(rating = review.rating, starSize = 16.dp)
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(text = review.comment, style = MaterialTheme.typography.bodyLarge)
+                Spacer(modifier = Modifier.height(8.dp))
+                Row {
+                    TextButton(onClick = { showReplyInput = !showReplyInput }) { Text("Responder") }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    if (replies.isNotEmpty() || !showReplies) {
+                        TextButton(onClick = { showReplies = !showReplies }) {
+                            Text(if (showReplies) "Ocultar Respostas" else "Ver Respostas")
+                        }
+                    }
+                }
 
-            AnimatedVisibility(visible = showReplies) {
-                Column(modifier = Modifier.padding(start = 16.dp, top = 8.dp).fillMaxWidth()) {
-                    replies.forEach { reply ->
-                        Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                            Text(text = reply.userName, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-                            Text(text = reply.replyText, style = MaterialTheme.typography.bodyMedium)
+                AnimatedVisibility(visible = showReplyInput) {
+                    Row(modifier = Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        OutlinedTextField(value = replyText, onValueChange = { replyText = it }, label = { Text("Sua resposta...") }, modifier = Modifier.weight(1f))
+                        IconButton(onClick = ::postReply) {
+                            Icon(Icons.Default.Send, contentDescription = "Enviar Resposta")
+                        }
+                    }
+                }
+
+                AnimatedVisibility(visible = showReplies) {
+                    Column(modifier = Modifier.padding(start = 16.dp, top = 8.dp).fillMaxWidth()) {
+                        replies.forEach { reply ->
+                            Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                                Text(text = reply.userName, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                                Text(text = reply.replyText, style = MaterialTheme.typography.bodyMedium)
+                            }
                         }
                     }
                 }
