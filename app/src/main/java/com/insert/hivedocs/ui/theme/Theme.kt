@@ -21,8 +21,6 @@ private val DarkColorScheme = darkColorScheme(
     primary = DarkOrangePrimary,
     secondary = DarkOrangeSecondary,
     tertiary = DarkOrangeTertiary,
-    // Você pode customizar outras cores do tema escuro aqui
-    // por exemplo, background, surface, etc.
 )
 
 private val LightColorScheme = lightColorScheme(
@@ -30,21 +28,19 @@ private val LightColorScheme = lightColorScheme(
     secondary = OrangeSecondary,
     tertiary = OrangeTertiary,
 
-    // Outras cores padrão que podem ser sobrescritas
     // background = Color(0xFFFFFBFE),
     // surface = Color(0xFFFFFBFE),
     onPrimary = Color.White,
     onSecondary = Color.Black,
     onTertiary = Color.Black,
-    onBackground = Color(0xFF1C1B1F),
+    onBackground = Color.Black,
     onSurface = Color(0xFF1C1B1F),
 )
 
 @Composable
 fun HiveDocsTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    // Dynamic color is available on Android 12+
-    dynamicColor: Boolean = false, // Desativado para forçar nosso tema laranja
+    dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {
