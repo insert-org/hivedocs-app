@@ -14,7 +14,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
-import com.insert.hivedocs.ai.GeminiChatbot // <<< NOVO IMPORT
+import com.insert.hivedocs.ai.GeminiChatbot
 import kotlinx.coroutines.launch
 
 data class ChatMessage(val text: String, val isFromUser: Boolean, val isLoading: Boolean = false)

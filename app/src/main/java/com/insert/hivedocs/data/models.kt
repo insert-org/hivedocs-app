@@ -25,7 +25,8 @@ data class Article(
 
 @Keep
 data class UserProfile(
-    val isAdmin: Boolean = false
+    val isAdmin: Boolean = false,
+    val isBanned: Boolean = false
 )
 
 @Keep
@@ -35,7 +36,8 @@ data class Review(
     val userName: String = "Anônimo",
     val rating: Float = 0f,
     val comment: String = "",
-    @ServerTimestamp val timestamp: Timestamp? = null
+    @ServerTimestamp val timestamp: Timestamp? = null,
+    val isReported: Boolean = false
 )
 
 @Keep
@@ -44,5 +46,6 @@ data class Reply(
     val userId: String = "",
     val userName: String = "Anônimo",
     val replyText: String = "",
-    @ServerTimestamp val timestamp: Timestamp? = null
+    @ServerTimestamp val timestamp: Timestamp? = null,
+    val isReported: Boolean = false
 )

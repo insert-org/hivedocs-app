@@ -37,7 +37,12 @@ import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ArticleDetailScreen(articleId: String, navController: NavController, isAdmin: Boolean) {
+fun ArticleDetailScreen(
+    articleId: String,
+    navController: NavController,
+    isAdmin: Boolean,
+    currentUserId: String?
+) {
     val firestore = FirebaseFirestore.getInstance()
     val auth = FirebaseAuth.getInstance()
     val context = LocalContext.current
@@ -70,6 +75,51 @@ fun ArticleDetailScreen(articleId: String, navController: NavController, isAdmin
                     userHasAlreadyReviewed = reviews.any { it.userId == user.uid }
                 }
             }
+    }
+
+    fun reportReview(reviewId: String) {
+        firestore.collection("articles").document(articleId)
+            .collection("reviews").document(reviewId)
+            .update("isReported", true)
+            .addOnSuccessListener { Toast.makeText(context, "Avaliação denunciada.", Toast.LENGTH_SHORT).show() }
+    }
+
+    fun reportReply(reviewId: String, replyId: String) {
+        firestore.collection("articles").document(articleId)
+            .collection("reviews").document(reviewId)
+            .collection("replies").document(replyId)
+            .update("isReported", true)
+            .addOnSuccessListener { Toast.makeText(context, "Resposta denunciada.", Toast.LENGTH_SHORT).show() }
+    }
+
+    fun postReply(reviewId: String, replyText: String) {
+        if (replyText.isBlank()) return
+        val currentUser = auth.currentUser ?: return
+        val newReply = Reply(
+            userId = currentUser.uid,
+            userName = auth.getDisplayName(),
+            replyText = replyText
+        )
+        firestore.collection("articles").document(articleId)
+            .collection("reviews").document(reviewId)
+            .collection("replies").add(newReply)
+            .addOnSuccessListener {
+                Toast.makeText(context, "Resposta enviada!", Toast.LENGTH_SHORT).show()
+            }
+    }
+
+    fun deleteReply(reviewId: String, replyId: String) {
+        firestore.collection("articles").document(articleId)
+            .collection("reviews").document(reviewId)
+            .collection("replies").document(replyId).delete()
+            .addOnSuccessListener { Toast.makeText(context, "Resposta excluída.", Toast.LENGTH_SHORT).show() }
+    }
+
+    fun editReply(reviewId: String, replyId: String, newText: String) {
+        firestore.collection("articles").document(articleId)
+            .collection("reviews").document(reviewId)
+            .collection("replies").document(replyId).update("replyText", newText)
+            .addOnSuccessListener { Toast.makeText(context, "Resposta atualizada.", Toast.LENGTH_SHORT).show() }
     }
 
     fun deleteReview(reviewToDelete: Review) {
@@ -288,10 +338,104 @@ fun ArticleDetailScreen(articleId: String, navController: NavController, isAdmin
                         currentUserId = currentUserId,
                         isAdmin = isAdmin,
                         onDelete = { deleteReview(review) },
-                        onEdit = { newRating, newComment ->
-                            editReview(review, newRating, newComment)
-                        }
+                        onEdit = { newRating, newComment -> editReview(review, newRating, newComment) },
+                        onReport = { reportReview(review.id) },
+                        onPostReply = { reviewId, replyText -> postReply(reviewId, replyText) },
+                        onDeleteReply = { reviewId, replyId -> deleteReply(reviewId, replyId) },
+                        onEditReply = { reviewId, replyId, newText -> editReply(reviewId, replyId, newText) },
+                        onReportReply = { reviewId, replyId -> reportReply(reviewId, replyId) }
                     )
+                }
+            }
+        }
+    }
+}
+
+private fun FirebaseAuth.getDisplayName(): String {
+    val currentUser = this.currentUser ?: return "Usuário Anônimo"
+    return currentUser.displayName?.takeIf { it.isNotBlank() }
+        ?: currentUser.email?.substringBefore('@')?.takeIf { it.isNotBlank() }
+        ?: "Usuário Anônimo"
+}
+
+@Composable
+fun ReplyItem(
+    reply: Reply,
+    currentUserId: String?,
+    isAdmin: Boolean,
+    onDelete: () -> Unit,
+    onEdit: (newText: String) -> Unit,
+    onReport: () -> Unit
+) {
+    var isEditing by remember { mutableStateOf(false) }
+    var editedText by remember { mutableStateOf(reply.replyText) }
+    var menuExpanded by remember { mutableStateOf(false) }
+
+    val isOwner = reply.userId.isNotBlank() && reply.userId == currentUserId
+    val canDelete = isAdmin || isOwner
+
+    if (isEditing) {
+        Row(
+            modifier = Modifier.padding(top = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            OutlinedTextField(
+                value = editedText,
+                onValueChange = { editedText = it },
+                label = { Text("Editando resposta...") },
+                modifier = Modifier.weight(1f)
+            )
+            IconButton(onClick = { isEditing = false }) {
+                Icon(
+                    painter = painterResource(R.drawable.x_solid),
+                    contentDescription = "Cancelar Edição",
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+            IconButton(onClick = {
+                onEdit(editedText)
+                isEditing = false
+            }) {
+                Icon(
+                    painter = painterResource(R.drawable.check_solid),
+                    contentDescription = "Salvar Resposta",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        }
+    } else {
+        Row(
+            modifier = Modifier.padding(top = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = reply.userName, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                Text(text = reply.replyText, style = MaterialTheme.typography.bodyMedium)
+            }
+            Box {
+                IconButton(onClick = { menuExpanded = true }, modifier = Modifier.size(24.dp)) {
+                    Icon(Icons.Default.MoreVert, contentDescription = "Opções da resposta")
+                }
+                DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                    if (isOwner) {
+                        DropdownMenuItem(text = { Text("Editar") }, onClick = {
+                            isEditing = true
+                            menuExpanded = false
+                        })
+                    }
+                    if (canDelete) {
+                        DropdownMenuItem(text = { Text("Excluir") }, onClick = {
+                            onDelete()
+                            menuExpanded = false
+                        })
+                    }
+                    if (!isOwner) {
+                        DropdownMenuItem(text = { Text("Denunciar") }, onClick = {
+                            onReport()
+                            menuExpanded = false
+                        })
+                    }
                 }
             }
         }
@@ -305,80 +449,57 @@ fun ReviewItem(
     currentUserId: String?,
     isAdmin: Boolean,
     onDelete: () -> Unit,
-    onEdit: (newRating: Float, newComment: String) -> Unit
+    onEdit: (newRating: Float, newComment: String) -> Unit,
+    onReport: () -> Unit,
+    onPostReply: (reviewId: String, replyText: String) -> Unit,
+    onDeleteReply: (reviewId: String, replyId: String) -> Unit,
+    onEditReply: (reviewId: String, replyId: String, newText: String) -> Unit,
+    onReportReply: (reviewId: String, replyId: String) -> Unit
 ) {
     var isEditing by remember { mutableStateOf(false) }
     var editedRating by remember { mutableFloatStateOf(review.rating) }
     var editedComment by remember { mutableStateOf(review.comment) }
-
     var menuExpanded by remember { mutableStateOf(false) }
 
     var replies by remember { mutableStateOf<List<Reply>>(emptyList()) }
     var showReplies by remember { mutableStateOf(false) }
     var showReplyInput by remember { mutableStateOf(false) }
     var replyText by remember { mutableStateOf("") }
-    val firestore = FirebaseFirestore.getInstance()
-    val auth = FirebaseAuth.getInstance()
-    val context = LocalContext.current
 
-    LaunchedEffect(showReplies) {
-        if (showReplies && replies.isEmpty()) {
-            firestore.collection("articles").document(articleId).collection("reviews")
-                .document(review.id).collection("replies")
-                .orderBy("timestamp", Query.Direction.ASCENDING)
-                .addSnapshotListener { snapshot, _ ->
-                    replies = snapshot?.documents?.mapNotNull { it.toObject<Reply>() } ?: emptyList()
-                }
-        }
-    }
+    val isOwner = review.userId.isNotBlank() && review.userId == currentUserId
+    val canDelete = isAdmin || isOwner
 
-    fun postReply() {
-        if (replyText.isBlank()) return
-        val currentUser = auth.currentUser ?: return
-        val newReply = Reply(
-            userId = currentUser.uid,
-            userName = auth.getDisplayName(),
-            replyText = replyText
-        )
-        firestore.collection("articles").document(articleId).collection("reviews")
-            .document(review.id).collection("replies").add(newReply)
-            .addOnSuccessListener {
-                replyText = ""
-                showReplyInput = false
-                showReplies = true
-                Toast.makeText(context, "Resposta enviada!", Toast.LENGTH_SHORT).show()
+    LaunchedEffect(Unit) {
+        FirebaseFirestore.getInstance().collection("articles").document(articleId).collection("reviews")
+            .document(review.id).collection("replies")
+            .orderBy("timestamp", Query.Direction.ASCENDING)
+            .addSnapshotListener { snapshot, _ ->
+                replies = snapshot?.documents?.mapNotNull { it.toObject<Reply>() } ?: emptyList()
             }
     }
 
     Card(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
         elevation = CardDefaults.cardElevation(2.dp)
     ) {
         if (isEditing) {
-            // --- MODO DE EDIÇÃO ---
-            Column(modifier = Modifier.padding(12.dp)) {
+            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Editando sua avaliação", style = MaterialTheme.typography.titleMedium)
-                Spacer(modifier = Modifier.height(8.dp))
                 Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxWidth()) {
                     StarRatingInput(rating = editedRating, onRatingChange = { editedRating = it })
                 }
-                Spacer(modifier = Modifier.height(8.dp))
                 OutlinedTextField(
                     value = editedComment,
                     onValueChange = { editedComment = it },
                     label = { Text("Seu comentário") },
                     modifier = Modifier.fillMaxWidth().height(100.dp)
                 )
-                Spacer(modifier = Modifier.height(16.dp))
                 Row(modifier = Modifier.align(Alignment.End)) {
                     TextButton(onClick = { isEditing = false }) { Text("Cancelar") }
-                    Spacer(modifier = Modifier.width(8.dp))
                     Button(onClick = {
                         onEdit(editedRating, editedComment)
                         isEditing = false
-                    }) {
-                        Text("Salvar")
-                    }
+                    }) { Text("Salvar") }
                 }
             }
         } else {
@@ -386,50 +507,43 @@ fun ReviewItem(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(text = review.userName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.weight(1f))
-
-                    val canManage = isAdmin || (review.userId == currentUserId)
-                    if (canManage) {
-                        Box {
-                            IconButton(onClick = { menuExpanded = true }) {
-                                Icon(Icons.Default.MoreVert, contentDescription = "Opções")
+                    Box {
+                        IconButton(onClick = { menuExpanded = true }) {
+                            Icon(Icons.Default.MoreVert, contentDescription = "Opções da avaliação")
+                        }
+                        DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                            if (isOwner) {
+                                DropdownMenuItem(text = { Text("Editar") }, onClick = {
+                                    isEditing = true
+                                    menuExpanded = false
+                                })
                             }
-                            DropdownMenu(
-                                expanded = menuExpanded,
-                                onDismissRequest = { menuExpanded = false }
-                            ) {
-                                if (review.userId == currentUserId) {
-                                    DropdownMenuItem(
-                                        text = { Text("Editar") },
-                                        onClick = {
-                                            editedRating = review.rating
-                                            editedComment = review.comment
-                                            isEditing = true
-                                            menuExpanded = false
-                                        }
-                                    )
-                                }
-                                DropdownMenuItem(
-                                    text = { Text("Excluir", color = MaterialTheme.colorScheme.error) },
-                                    onClick = {
-                                        onDelete()
-                                        menuExpanded = false
-                                    }
-                                )
+                            if (canDelete) {
+                                DropdownMenuItem(text = { Text("Excluir", color = MaterialTheme.colorScheme.error) }, onClick = {
+                                    onDelete()
+                                    menuExpanded = false
+                                })
+                            }
+                            if (!isOwner) {
+                                DropdownMenuItem(text = { Text("Denunciar") }, onClick = {
+                                    onReport()
+                                    menuExpanded = false
+                                })
                             }
                         }
                     }
                 }
-                Spacer(modifier = Modifier.height(4.dp))
                 StarRatingDisplay(rating = review.rating, starSize = 16.dp)
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(text = review.comment, style = MaterialTheme.typography.bodyLarge)
                 Spacer(modifier = Modifier.height(8.dp))
+
                 Row {
                     TextButton(onClick = { showReplyInput = !showReplyInput }) { Text("Responder") }
                     Spacer(modifier = Modifier.width(8.dp))
-                    if (replies.isNotEmpty() || !showReplies) {
+                    if (replies.isNotEmpty()) {
                         TextButton(onClick = { showReplies = !showReplies }) {
-                            Text(if (showReplies) "Ocultar Respostas" else "Ver Respostas")
+                            Text(if (showReplies) "Ocultar Respostas (${replies.size})" else "Ver Respostas (${replies.size})")
                         }
                     }
                 }
@@ -437,7 +551,10 @@ fun ReviewItem(
                 AnimatedVisibility(visible = showReplyInput) {
                     Row(modifier = Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                         OutlinedTextField(value = replyText, onValueChange = { replyText = it }, label = { Text("Sua resposta...") }, modifier = Modifier.weight(1f))
-                        IconButton(onClick = ::postReply) {
+                        IconButton(onClick = {
+                            onPostReply(review.id, replyText)
+                            replyText = ""
+                        }) {
                             Icon(Icons.Default.Send, contentDescription = "Enviar Resposta")
                         }
                     }
@@ -446,21 +563,19 @@ fun ReviewItem(
                 AnimatedVisibility(visible = showReplies) {
                     Column(modifier = Modifier.padding(start = 16.dp, top = 8.dp).fillMaxWidth()) {
                         replies.forEach { reply ->
-                            Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                                Text(text = reply.userName, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-                                Text(text = reply.replyText, style = MaterialTheme.typography.bodyMedium)
-                            }
+                            ReplyItem(
+                                reply = reply,
+                                currentUserId = currentUserId,
+                                isAdmin = isAdmin,
+                                onDelete = { onDeleteReply(review.id, reply.id) },
+                                onEdit = { newText -> onEditReply(review.id, reply.id, newText) },
+                                onReport = { onReportReply(review.id, reply.id) }
+                            )
+                            Divider(modifier = Modifier.padding(top = 8.dp))
                         }
                     }
                 }
             }
         }
     }
-}
-
-private fun FirebaseAuth.getDisplayName(): String {
-    val currentUser = this.currentUser ?: return "Usuário Anônimo"
-    return currentUser.displayName?.takeIf { it.isNotBlank() }
-        ?: currentUser.email?.substringBefore('@')?.takeIf { it.isNotBlank() }
-        ?: "Usuário Anônimo"
 }
