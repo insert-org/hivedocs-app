@@ -109,7 +109,7 @@ fun MainAppScreen(isAdmin: Boolean, currentUserId: String?) {
     val navItems = if (isAdmin) {
         listOf(BottomNavItem.ArticleList, BottomNavItem.Moderation, BottomNavItem.Chatbot, BottomNavItem.Profile)
     } else {
-        listOf(BottomNavItem.ArticleList, BottomNavItem.NewArticle, BottomNavItem.Chatbot, BottomNavItem.Profile)
+        listOf(BottomNavItem.ArticleList, BottomNavItem.Chatbot, BottomNavItem.Profile)
     }
 
     Scaffold(
@@ -153,7 +153,7 @@ fun MainAppScreen(isAdmin: Boolean, currentUserId: String?) {
                 ArticleListScreen(navController = navController)
             }
             composable(BottomNavItem.NewArticle.route) {
-                NewArticleScreen(navController = navController)
+                NewArticleScreen(navController = navController, isAdmin = isAdmin)
             }
             composable(BottomNavItem.Profile.route) {
                 ProfileScreen(auth = FirebaseAuth.getInstance(), isAdmin = isAdmin)

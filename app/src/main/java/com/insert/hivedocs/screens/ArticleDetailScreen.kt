@@ -47,7 +47,6 @@ fun ArticleDetailScreen(
     val auth = FirebaseAuth.getInstance()
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
-    val currentUserId = auth.currentUser?.uid
 
     var article by remember { mutableStateOf<Article?>(null) }
     var reviews by remember { mutableStateOf<List<Review>>(emptyList()) }

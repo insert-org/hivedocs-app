@@ -8,12 +8,15 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ktx.toObject
+import com.insert.hivedocs.R
 import com.insert.hivedocs.components.ArticleListItem
 import com.insert.hivedocs.data.Article
+import com.insert.hivedocs.navigation.BottomNavItem
 
 @Composable
 fun ArticleListScreen(navController: NavController) {
@@ -34,7 +37,25 @@ fun ArticleListScreen(navController: NavController) {
     }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        Text(text = "Artigos Recentes", style = MaterialTheme.typography.headlineMedium)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = "Artigos Recentes",
+                style = MaterialTheme.typography.headlineMedium
+            )
+            IconButton(onClick = {
+                navController.navigate(BottomNavItem.NewArticle.route)
+            }) {
+                Icon(
+                    painter = painterResource(R.drawable.plus_solid),
+                    contentDescription = "Adicionar Novo Artigo",
+                    modifier = Modifier.size(32.dp)
+                )
+            }
+        }
         Spacer(modifier = Modifier.height(16.dp))
         if (isLoading) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
