@@ -180,7 +180,7 @@ fun LoginScreen(onLoginSuccess: () -> Unit) {
                 onClick = { handleEmailSignUp() },
                 enabled = !isLoading,
                 modifier = Modifier.weight(1f),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
             ) {
                 Text("Registrar")
             }

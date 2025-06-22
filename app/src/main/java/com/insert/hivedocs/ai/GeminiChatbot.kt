@@ -4,10 +4,8 @@ import com.google.ai.client.generativeai.GenerativeModel
 import com.insert.hivedocs.BuildConfig
 import com.insert.hivedocs.data.KnowledgeBase
 
-// Objeto singleton para interagir com o Gemini
 object GeminiChatbot {
 
-    // Constrói o prompt inicial que dá ao bot sua personalidade e conhecimento
     private fun buildPrompt(question: String): String {
         val knowledgeString = KnowledgeBase.qna.entries.joinToString("\n") { (keywords, answer) ->
             "Se a pergunta contiver palavras como '${keywords.joinToString(", ")}', responda com: '$answer'"
@@ -28,20 +26,17 @@ object GeminiChatbot {
         """.trimIndent()
     }
 
-    // Inicializa o modelo do Gemini
     private val generativeModel = GenerativeModel(
-        modelName = "gemini-1.5-flash", // Um modelo rápido e eficiente
-        apiKey = BuildConfig.API_KEY // Usa a chave de API segura
+        modelName = "gemini-1.5-flash",
+        apiKey = BuildConfig.API_KEY
     )
 
-    // Função assíncrona para gerar a resposta
     suspend fun generateResponse(userInput: String): String {
         return try {
             val prompt = buildPrompt(userInput)
             val response = generativeModel.generateContent(prompt)
             response.text ?: "Desculpe, não consegui processar sua pergunta no momento."
         } catch (e: Exception) {
-            // Trata erros de rede, chave de API inválida, etc.
             e.printStackTrace()
             "Ocorreu um erro ao me conectar. Por favor, verifique sua conexão com a internet e tente novamente."
         }
