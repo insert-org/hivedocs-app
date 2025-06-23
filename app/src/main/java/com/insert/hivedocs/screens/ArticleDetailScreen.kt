@@ -33,6 +33,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextDecoration
 import com.insert.hivedocs.R
 import com.insert.hivedocs.components.StarRatingInput
+import com.insert.hivedocs.data.Report
 import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -76,19 +77,31 @@ fun ArticleDetailScreen(
             }
     }
 
-    fun reportReview(reviewId: String) {
-        firestore.collection("articles").document(articleId)
-            .collection("reviews").document(reviewId)
-            .update("isReported", true)
-            .addOnSuccessListener { Toast.makeText(context, "Avaliação denunciada.", Toast.LENGTH_SHORT).show() }
-    }
+    fun submitReport(
+        contentType: String,
+        contentText: String,
+        contentOwnerId: String,
+        articleId: String,
+        reviewId: String,
+        replyId: String? = null,
+        reason: String
+    ) {
+        val currentUser = auth.currentUser ?: return
+        val report = Report(
+            contentType = contentType,
+            contentText = contentText,
+            contentOwnerId = contentOwnerId,
+            articleId = articleId,
+            reviewId = reviewId,
+            replyId = replyId,
+            reporterId = currentUser.uid,
+            reporterName = auth.getDisplayName(),
+            reason = reason
+        )
 
-    fun reportReply(reviewId: String, replyId: String) {
-        firestore.collection("articles").document(articleId)
-            .collection("reviews").document(reviewId)
-            .collection("replies").document(replyId)
-            .update("isReported", true)
-            .addOnSuccessListener { Toast.makeText(context, "Resposta denunciada.", Toast.LENGTH_SHORT).show() }
+        firestore.collection("reports").add(report)
+            .addOnSuccessListener { Toast.makeText(context, "Denúncia enviada para moderação.", Toast.LENGTH_SHORT).show() }
+            .addOnFailureListener { e -> Toast.makeText(context, "Erro ao enviar denúncia: ${e.message}", Toast.LENGTH_SHORT).show() }
     }
 
     fun postReply(reviewId: String, replyText: String) {
@@ -338,11 +351,30 @@ fun ArticleDetailScreen(
                         isAdmin = isAdmin,
                         onDelete = { deleteReview(review) },
                         onEdit = { newRating, newComment -> editReview(review, newRating, newComment) },
-                        onReport = { reportReview(review.id) },
                         onPostReply = { reviewId, replyText -> postReply(reviewId, replyText) },
                         onDeleteReply = { reviewId, replyId -> deleteReply(reviewId, replyId) },
                         onEditReply = { reviewId, replyId, newText -> editReply(reviewId, replyId, newText) },
-                        onReportReply = { reviewId, replyId -> reportReply(reviewId, replyId) }
+                        onReport = { reason ->
+                            submitReport(
+                                contentType = "review",
+                                contentText = review.comment,
+                                contentOwnerId = review.userId,
+                                articleId = articleId,
+                                reviewId = review.id,
+                                reason = reason
+                            )
+                        },
+                        onReportReply = { reply, reason ->
+                            submitReport(
+                                contentType = "reply",
+                                contentText = reply.replyText,
+                                contentOwnerId = reply.userId,
+                                articleId = articleId,
+                                reviewId = review.id,
+                                replyId = reply.id,
+                                reason = reason
+                            )
+                        }
                     )
                 }
             }
@@ -364,14 +396,26 @@ fun ReplyItem(
     isAdmin: Boolean,
     onDelete: () -> Unit,
     onEdit: (newText: String) -> Unit,
-    onReport: () -> Unit
+    onReport: (reason: String) -> Unit
 ) {
     var isEditing by remember { mutableStateOf(false) }
     var editedText by remember { mutableStateOf(reply.replyText) }
     var menuExpanded by remember { mutableStateOf(false) }
+    var showReportDialog by remember { mutableStateOf(false) }
 
     val isOwner = reply.userId.isNotBlank() && reply.userId == currentUserId
     val canDelete = isAdmin || isOwner
+
+    if (showReportDialog) {
+        ReportDialog(
+            reportedContent = reply.replyText,
+            onDismiss = { showReportDialog = false },
+            onConfirm = { reason ->
+                onReport(reason)
+                showReportDialog = false
+            }
+        )
+    }
 
     if (isEditing) {
         Row(
@@ -418,22 +462,13 @@ fun ReplyItem(
                 }
                 DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
                     if (isOwner) {
-                        DropdownMenuItem(text = { Text("Editar") }, onClick = {
-                            isEditing = true
-                            menuExpanded = false
-                        })
+                        DropdownMenuItem(text = { Text("Editar") }, onClick = { isEditing = true; menuExpanded = false })
                     }
                     if (canDelete) {
-                        DropdownMenuItem(text = { Text("Excluir") }, onClick = {
-                            onDelete()
-                            menuExpanded = false
-                        })
+                        DropdownMenuItem(text = { Text("Excluir") }, onClick = { onDelete(); menuExpanded = false })
                     }
                     if (!isOwner) {
-                        DropdownMenuItem(text = { Text("Denunciar") }, onClick = {
-                            onReport()
-                            menuExpanded = false
-                        })
+                        DropdownMenuItem(text = { Text("Denunciar") }, onClick = { showReportDialog = true; menuExpanded = false })
                     }
                 }
             }
@@ -449,11 +484,11 @@ fun ReviewItem(
     isAdmin: Boolean,
     onDelete: () -> Unit,
     onEdit: (newRating: Float, newComment: String) -> Unit,
-    onReport: () -> Unit,
+    onReport: (reason: String) -> Unit,
     onPostReply: (reviewId: String, replyText: String) -> Unit,
     onDeleteReply: (reviewId: String, replyId: String) -> Unit,
     onEditReply: (reviewId: String, replyId: String, newText: String) -> Unit,
-    onReportReply: (reviewId: String, replyId: String) -> Unit
+    onReportReply: (reply: Reply, reason: String) -> Unit
 ) {
     var isEditing by remember { mutableStateOf(false) }
     var editedRating by remember { mutableFloatStateOf(review.rating) }
@@ -467,6 +502,18 @@ fun ReviewItem(
 
     val isOwner = review.userId.isNotBlank() && review.userId == currentUserId
     val canDelete = isAdmin || isOwner
+    var showReportDialog by remember { mutableStateOf(false) }
+
+    if (showReportDialog) {
+        ReportDialog(
+            reportedContent = review.comment,
+            onDismiss = { showReportDialog = false },
+            onConfirm = { reason ->
+                onReport(reason)
+                showReportDialog = false
+            }
+        )
+    }
 
     LaunchedEffect(Unit) {
         FirebaseFirestore.getInstance().collection("articles").document(articleId).collection("reviews")
@@ -524,10 +571,13 @@ fun ReviewItem(
                                 })
                             }
                             if (!isOwner) {
-                                DropdownMenuItem(text = { Text("Denunciar") }, onClick = {
-                                    onReport()
-                                    menuExpanded = false
-                                })
+                                DropdownMenuItem(
+                                    text = { Text("Denunciar") },
+                                    onClick = {
+                                        showReportDialog = true
+                                        menuExpanded = false
+                                    }
+                                )
                             }
                         }
                     }
@@ -568,7 +618,7 @@ fun ReviewItem(
                                 isAdmin = isAdmin,
                                 onDelete = { onDeleteReply(review.id, reply.id) },
                                 onEdit = { newText -> onEditReply(review.id, reply.id, newText) },
-                                onReport = { onReportReply(review.id, reply.id) }
+                                onReport = { reason -> onReportReply(reply, reason) }
                             )
                             Divider(modifier = Modifier.padding(top = 8.dp))
                         }
@@ -577,4 +627,52 @@ fun ReviewItem(
             }
         }
     }
+}
+
+@Composable
+fun ReportDialog(
+    reportedContent: String,
+    onDismiss: () -> Unit,
+    onConfirm: (reason: String) -> Unit
+) {
+    var reason by remember { mutableStateOf("") }
+    var isLoading by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Denunciar Conteúdo") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Conteúdo a ser denunciado:", style = MaterialTheme.typography.labelMedium)
+                Text(
+                    text = "\"$reportedContent\"",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                )
+                Divider(modifier = Modifier.padding(vertical = 8.dp))
+                OutlinedTextField(
+                    value = reason,
+                    onValueChange = { reason = it },
+                    label = { Text("Motivo da denúncia") },
+                    placeholder = { Text("Ex: Spam, discurso de ódio...") }
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    isLoading = true
+                    onConfirm(reason)
+                },
+                enabled = reason.isNotBlank() && !isLoading
+            ) {
+                if(isLoading) CircularProgressIndicator(modifier = Modifier.size(24.dp)) else Text("Confirmar")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = !isLoading) {
+                Text("Cancelar")
+            }
+        }
+    )
 }

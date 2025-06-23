@@ -37,7 +37,6 @@ data class Review(
     val rating: Float = 0f,
     val comment: String = "",
     @ServerTimestamp val timestamp: Timestamp? = null,
-    val isReported: Boolean = false
 )
 
 @Keep
@@ -47,5 +46,19 @@ data class Reply(
     val userName: String = "Anônimo",
     val replyText: String = "",
     @ServerTimestamp val timestamp: Timestamp? = null,
-    val isReported: Boolean = false
+)
+
+@Keep
+data class Report(
+    @DocumentId val id: String = "",
+    val contentType: String = "review",
+    val contentText: String = "",
+    val contentOwnerId: String = "",
+    val articleId: String = "",
+    val reviewId: String = "",
+    val replyId: String? = null,
+    val reporterId: String = "",
+    val reporterName: String = "",
+    val reason: String = "",
+    @ServerTimestamp val timestamp: Timestamp? = null
 )
