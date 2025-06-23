@@ -12,6 +12,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.ktx.toObject
 import com.insert.hivedocs.R
 import com.insert.hivedocs.components.ArticleListItem
@@ -26,6 +27,7 @@ fun ArticleListScreen(navController: NavController) {
     LaunchedEffect(Unit) {
         FirebaseFirestore.getInstance().collection("articles")
             .whereEqualTo("approved", true)
+            .orderBy("createdAt", Query.Direction.DESCENDING)
             .addSnapshotListener { snapshot, e ->
                 isLoading = false
                 if (e != null) {

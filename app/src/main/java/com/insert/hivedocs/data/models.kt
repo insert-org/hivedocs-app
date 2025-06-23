@@ -18,10 +18,12 @@ data class Article(
 
     val ratingCount: Long = 0,
     val ratingSum: Double = 0.0,
-    val articleUrl: String = ""
+    val articleUrl: String = "",
+
+    @ServerTimestamp val createdAt: Timestamp? = null
 ) {
     @Suppress("unused")
-    constructor() : this("", "", "", "", "", false, 2024, 0, 0.0, "")
+    constructor() : this("", "", "", "", "", false, 2024, 0, 0.0, "", null)
 }
 
 @Keep
