@@ -1,6 +1,11 @@
 package com.insert.hivedocs.navigation
 
+import android.Manifest
+import android.os.Build
+import android.util.Log
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -34,9 +39,11 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.messaging.FirebaseMessaging
 import com.insert.hivedocs.R
 import com.insert.hivedocs.data.UserProfile
 import com.insert.hivedocs.screens.*
+import com.insert.hivedocs.services.FirebaseMessagingService
 import com.insert.hivedocs.util.checkUserProfile
 
 
@@ -57,6 +64,22 @@ fun AppNavigator() {
     var userProfile by remember { mutableStateOf<UserProfile?>(null) }
     var isLoadingProfile by remember { mutableStateOf(true) }
 
+    val requestPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        if (isGranted) {
+            Log.d("FCM", "Permissão para notificações concedida.")
+        } else {
+            Log.d("FCM", "Permissão para notificações negada.")
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
     DisposableEffect(auth) {
         val authStateListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
             val user = firebaseAuth.currentUser
@@ -69,6 +92,11 @@ fun AppNavigator() {
                         auth.signOut()
                     } else {
                         userProfile = profile ?: UserProfile()
+                        FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
+                            if (task.isSuccessful) {
+                                FirebaseMessagingService.sendTokenToFirestore(task.result)
+                            }
+                        }
                     }
                     isLoadingProfile = false
                 }

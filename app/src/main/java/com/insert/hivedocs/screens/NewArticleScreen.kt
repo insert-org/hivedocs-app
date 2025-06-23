@@ -16,6 +16,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.insert.hivedocs.data.Article
 import com.insert.hivedocs.navigation.BottomNavItem
@@ -24,6 +25,7 @@ import java.util.Calendar
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NewArticleScreen(navController: NavController, isAdmin: Boolean) {
+    val auth = FirebaseAuth.getInstance()
     var title by remember { mutableStateOf(TextFieldValue("")) }
     var resume by remember { mutableStateOf(TextFieldValue("")) }
     var author by remember { mutableStateOf(TextFieldValue("")) }
@@ -39,10 +41,13 @@ fun NewArticleScreen(navController: NavController, isAdmin: Boolean) {
         }
 
         isLoading = true
+        val currentUserId = auth.currentUser?.uid ?: ""
+
         val article = Article(
             title = title.text,
             resume = resume.text,
             author = author.text,
+            authorId = currentUserId,
             year = year.text.toIntOrNull() ?: Calendar.getInstance().get(Calendar.YEAR),
             approved = isAdmin,
             articleUrl = articleUrl.text

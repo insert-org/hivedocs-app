@@ -27,6 +27,8 @@ import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.firestore.FirebaseFirestore
 import com.insert.hivedocs.R
 import com.insert.hivedocs.data.UserProfile
+import com.google.firebase.auth.AuthResult
+import com.insert.hivedocs.util.checkUserProfile
 
 @Composable
 fun LoginScreen(onLoginSuccess: () -> Unit) {
@@ -36,6 +38,26 @@ fun LoginScreen(onLoginSuccess: () -> Unit) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
+
+    fun processSuccessfulLogin(task: com.google.android.gms.tasks.Task<AuthResult>) {
+        val user = task.result?.user
+        if (user == null) {
+            isLoading = false
+            Toast.makeText(context, "Erro ao obter informações do usuário.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        checkUserProfile(user.uid) { userProfile ->
+            isLoading = false
+            if (userProfile.isBanned) {
+                Toast.makeText(context, "Esta conta foi banida.", Toast.LENGTH_LONG).show()
+                auth.signOut()
+            } else {
+                Toast.makeText(context, "Login bem-sucedido!", Toast.LENGTH_SHORT).show()
+                onLoginSuccess()
+            }
+        }
+    }
 
     fun handleEmailLogin() {
         if (email.isBlank() || password.isBlank()) {
@@ -47,8 +69,7 @@ fun LoginScreen(onLoginSuccess: () -> Unit) {
             .addOnCompleteListener { task ->
                 isLoading = false
                 if (task.isSuccessful) {
-                    Toast.makeText(context, "Login bem-sucedido!", Toast.LENGTH_SHORT).show()
-                    onLoginSuccess()
+                    processSuccessfulLogin(task)
                 } else {
                     val error = (task.exception as? FirebaseAuthException)?.errorCode
                     val message = when (error) {
@@ -110,7 +131,7 @@ fun LoginScreen(onLoginSuccess: () -> Unit) {
             auth.signInWithCredential(credential).addOnCompleteListener { authTask ->
                 isLoading = false
                 if (authTask.isSuccessful) {
-                    onLoginSuccess()
+                    processSuccessfulLogin(authTask)
                 } else {
                     Toast.makeText(context, "Erro ao autenticar com Google.", Toast.LENGTH_SHORT).show()
                 }

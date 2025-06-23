@@ -53,6 +53,7 @@ android {
 }
 
 dependencies {
+    implementation(libs.firebase.messaging.ktx)
     implementation(libs.generativeai)
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth.ktx)

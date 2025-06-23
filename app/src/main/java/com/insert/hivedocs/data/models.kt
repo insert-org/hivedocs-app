@@ -12,6 +12,7 @@ data class Article(
     val title: String = "",
     val resume: String = "",
     val author: String = "",
+    val authorId: String = "",
     val approved: Boolean = false,
     val year: Int = Calendar.getInstance().get(Calendar.YEAR),
 
@@ -20,13 +21,14 @@ data class Article(
     val articleUrl: String = ""
 ) {
     @Suppress("unused")
-    constructor() : this("", "", "", "", false, 2024, 0, 0.0, "")
+    constructor() : this("", "", "", "", "", false, 2024, 0, 0.0, "")
 }
 
 @Keep
 data class UserProfile(
     val isAdmin: Boolean = false,
-    val isBanned: Boolean = false
+    val isBanned: Boolean = false,
+    val fcmTokens: List<String> = emptyList()
 )
 
 @Keep
